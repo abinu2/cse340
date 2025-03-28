@@ -134,46 +134,26 @@ void ReadGrammar() {
  * output is one line, and all names are space delineated
  */
 void Task1() {
-    // Track terminals in order of appearance, without duplicates
-    vector<string> ordered_terminals;
-    unordered_set<string> seen_terminals;
-   
-    // Track non-terminals in order of appearance (already done in ReadGrammar)
-   
-    // First pass to collect terminals in order of appearance
-    for (const Rule& rule : grammar) {
-        // Check RHS symbols
-        for (const string& symbol : rule.rhs) {
-            // If it's not a non-terminal and not seen before
-            if (nonTerminalSet.find(symbol) == nonTerminalSet.end() &&
-                seen_terminals.find(symbol) == seen_terminals.end()) {
-                ordered_terminals.push_back(symbol);
-                seen_terminals.insert(symbol);
-            }
-        }
-    }
-   
-    // Print terminals followed by non-terminals
-    bool first = true;
-   
     // Print terminals
-    for (const string& terminal : ordered_terminals) {
-        if (!first) {
+    for (size_t i = 0; i < terminals.size(); i++) {
+        cout << terminals[i];
+        if (i < terminals.size() - 1) {
             cout << " ";
         }
-        cout << terminal;
-        first = false;
     }
-   
+    
+    if (!terminals.empty() && !non_terminals.empty()) {
+        cout << " ";
+    }
+    
     // Print non-terminals
-    for (const string& non_terminal : non_terminals) {
-        if (!first) {
+    for (size_t i = 0; i < non_terminals.size(); i++) {
+        cout << non_terminals[i];
+        if (i < non_terminals.size() - 1) {
             cout << " ";
         }
-        cout << non_terminal;
-        first = false;
     }
-   
+    
     cout << endl;
 }
 
@@ -238,23 +218,30 @@ void Task2() {
 
 /*
  * Task 3:
- * Compute and print FIRST sets for all non-terminals
+ * Print out FIRST set of the grammar in specified format.
  */
 void Task3() {
-    // Calculate nullable set (same as Task 2)
+    // First, calculate nullable non-terminals
     set<string> nullable;
+    
+    // Initialization: Add all non-terminals with epsilon rules
     for (const Rule& rule : grammar) {
         if (rule.rhs.empty()) {
             nullable.insert(rule.lhs);
         }
     }
     
+    // Iteratively find more nullable non-terminals
     bool changed = true;
     while (changed) {
         changed = false;
         for (const Rule& rule : grammar) {
-            if (nullable.find(rule.lhs) != nullable.end()) continue;
+            // Skip if already nullable
+            if (nullable.find(rule.lhs) != nullable.end()) {
+                continue;
+            }
             
+            // Check if all symbols on the RHS are nullable
             bool all_nullable = true;
             for (const string& symbol : rule.rhs) {
                 if (nullable.find(symbol) == nullable.end()) {
@@ -262,15 +249,17 @@ void Task3() {
                     break;
                 }
             }
+            
+            // If all symbols are nullable, the LHS is nullable
             if (all_nullable && !rule.rhs.empty()) {
                 nullable.insert(rule.lhs);
                 changed = true;
             }
         }
     }
-
+    
     // Initialize FIRST sets
-    unordered_map<string, set<string>> FIRST;
+    map<string, set<string>> FIRST;
     
     // Initialize FIRST sets for terminals
     for (const string& terminal : terminals) {
@@ -281,97 +270,184 @@ void Task3() {
     changed = true;
     while (changed) {
         changed = false;
+        
         for (const Rule& rule : grammar) {
-            if (rule.rhs.empty()) continue;
+            if (rule.rhs.empty()) {
+                continue; // Skip epsilon rules
+            }
+            
+            // Process each symbol in the RHS until a non-nullable symbol or end
+            bool all_nullable = true;
             
             for (size_t i = 0; i < rule.rhs.size(); i++) {
                 const string& symbol = rule.rhs[i];
                 
                 // Add FIRST(symbol) to FIRST(rule.lhs)
-                for (const string& term : FIRST[symbol]) {
-                    if (FIRST[rule.lhs].insert(term).second) {
-                        changed = true;
+                for (const string& terminal : terminals) {
+                    if (FIRST[symbol].find(terminal) != FIRST[symbol].end()) {
+                        if (FIRST[rule.lhs].insert(terminal).second) {
+                            changed = true;
+                        }
                     }
                 }
                 
                 // If symbol is not nullable, stop
                 if (nullable.find(symbol) == nullable.end()) {
+                    all_nullable = false;
                     break;
                 }
             }
         }
     }
     
-    // Print FIRST sets in order
+    // Print FIRST sets in order of non-terminals
     for (const string& nt : non_terminals) {
         cout << "FIRST(" << nt << ") = {";
         
-        // Collect terminals in order of appearance
-        vector<string> ordered_terms;
+        // Collect terminals in FIRST set
+        vector<string> first_terminals;
         for (const string& terminal : terminals) {
             if (FIRST[nt].find(terminal) != FIRST[nt].end()) {
-                ordered_terms.push_back(terminal);
+                first_terminals.push_back(terminal);
             }
         }
         
-        // Print with proper formatting
-        if (!ordered_terms.empty()) {
-            cout << " " << ordered_terms[0];
-            for (size_t i = 1; i < ordered_terms.size(); i++) {
-                cout << ", " << ordered_terms[i];
+        // Print terminals with proper spacing
+        if (!first_terminals.empty()) {
+            cout << " " << first_terminals[0];
+            for (size_t i = 1; i < first_terminals.size(); i++) {
+                cout << ", " << first_terminals[i];
             }
+            cout << " ";
+        } else {
+            cout << " ";
         }
-        cout << " }" << endl;
+        
+        cout << "}" << endl;
     }
 }
 
 /*
  * Task 4:
- * Compute and print FOLLOW sets for all non-terminals
+ * Print out FOLLOW set of the grammar in specified format.
  */
 void Task4() {
-    // Calculate nullable and FIRST sets (same as Task 3)
-    // ... (same as Task 3 implementation)
-
-    // Initialize FOLLOW sets
-    unordered_map<string, set<string>> FOLLOW;
+    // First, calculate nullable non-terminals
+    set<string> nullable;
     
-    // Add $ to FOLLOW of start symbol
+    // Initialization: Add all non-terminals with epsilon rules
+    for (const Rule& rule : grammar) {
+        if (rule.rhs.empty()) {
+            nullable.insert(rule.lhs);
+        }
+    }
+    
+    // Iteratively find more nullable non-terminals
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (const Rule& rule : grammar) {
+            // Skip if already nullable
+            if (nullable.find(rule.lhs) != nullable.end()) {
+                continue;
+            }
+            
+            // Check if all symbols on the RHS are nullable
+            bool all_nullable = true;
+            for (const string& symbol : rule.rhs) {
+                if (nullable.find(symbol) == nullable.end()) {
+                    all_nullable = false;
+                    break;
+                }
+            }
+            
+            // If all symbols are nullable, the LHS is nullable
+            if (all_nullable && !rule.rhs.empty()) {
+                nullable.insert(rule.lhs);
+                changed = true;
+            }
+        }
+    }
+    
+    // Calculate FIRST sets
+    map<string, set<string>> FIRST;
+    
+    // Initialize FIRST sets for terminals
+    for (const string& terminal : terminals) {
+        FIRST[terminal].insert(terminal);
+    }
+    
+    // Iteratively calculate FIRST sets
+    changed = true;
+    while (changed) {
+        changed = false;
+        
+        for (const Rule& rule : grammar) {
+            if (rule.rhs.empty()) {
+                continue; // Skip epsilon rules
+            }
+            
+            // Process each symbol in the RHS until a non-nullable symbol or end
+            bool all_nullable = true;
+            
+            for (size_t i = 0; i < rule.rhs.size(); i++) {
+                const string& symbol = rule.rhs[i];
+                
+                // Add FIRST(symbol) to FIRST(rule.lhs)
+                for (const string& terminal : terminals) {
+                    if (FIRST[symbol].find(terminal) != FIRST[symbol].end()) {
+                        if (FIRST[rule.lhs].insert(terminal).second) {
+                            changed = true;
+                        }
+                    }
+                }
+                
+                // If symbol is not nullable, stop
+                if (nullable.find(symbol) == nullable.end()) {
+                    all_nullable = false;
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Initialize FOLLOW sets
+    map<string, set<string>> FOLLOW;
+    
+    // Add $ to FOLLOW of the start symbol
     if (!non_terminals.empty()) {
         FOLLOW[non_terminals[0]].insert("$");
     }
     
     // Iteratively calculate FOLLOW sets
-    bool changed = true;
+    changed = true;
     while (changed) {
         changed = false;
         
         for (const Rule& rule : grammar) {
-            for (int i = rule.rhs.size() - 1; i >= 0; i--) {
+            for (size_t i = 0; i < rule.rhs.size(); i++) {
                 const string& symbol = rule.rhs[i];
                 
+                // Skip terminals
                 if (nonTerminalSet.find(symbol) == nonTerminalSet.end()) {
-                    continue; // Skip terminals
+                    continue;
                 }
                 
-                // Case 1: Last symbol in rule
-                if (i == rule.rhs.size() - 1) {
-                    for (const string& term : FOLLOW[rule.lhs]) {
-                        if (FOLLOW[symbol].insert(term).second) {
-                            changed = true;
-                        }
-                    }
-                }
-                // Case 2: Not last symbol
-                else {
+                // If there are symbols after this one
+                if (i < rule.rhs.size() - 1) {
+                    // Add FIRST(next) - {ε} to FOLLOW(symbol)
+                    size_t j = i + 1;
                     bool all_nullable = true;
-                    for (size_t j = i + 1; j < rule.rhs.size(); j++) {
+                    
+                    while (j < rule.rhs.size()) {
                         const string& next = rule.rhs[j];
                         
                         // Add FIRST(next) to FOLLOW(symbol)
-                        for (const string& term : FIRST[next]) {
-                            if (FOLLOW[symbol].insert(term).second) {
-                                changed = true;
+                        for (const string& terminal : terminals) {
+                            if (FIRST[next].find(terminal) != FIRST[next].end()) {
+                                if (FOLLOW[symbol].insert(terminal).second) {
+                                    changed = true;
+                                }
                             }
                         }
                         
@@ -380,14 +456,24 @@ void Task4() {
                             all_nullable = false;
                             break;
                         }
+                        
+                        j++;
                     }
                     
-                    // If all remaining symbols are nullable
+                    // If all remaining symbols are nullable, add FOLLOW(rule.lhs)
                     if (all_nullable) {
                         for (const string& term : FOLLOW[rule.lhs]) {
                             if (FOLLOW[symbol].insert(term).second) {
                                 changed = true;
                             }
+                        }
+                    }
+                }
+                else {
+                    // This is the last symbol, add FOLLOW(rule.lhs)
+                    for (const string& term : FOLLOW[rule.lhs]) {
+                        if (FOLLOW[symbol].insert(term).second) {
+                            changed = true;
                         }
                     }
                 }
@@ -399,30 +485,35 @@ void Task4() {
     for (const string& nt : non_terminals) {
         cout << "FOLLOW(" << nt << ") = {";
         
-        // Check for $
+        // Check if $ is in the set
         bool has_dollar = FOLLOW[nt].find("$") != FOLLOW[nt].end();
         
-        // Collect other terminals in order
-        vector<string> ordered_terms;
+        // Collect terminals in FOLLOW set
+        vector<string> follow_terminals;
         for (const string& terminal : terminals) {
-            if (terminal != "$" && FOLLOW[nt].find(terminal) != FOLLOW[nt].end()) {
-                ordered_terms.push_back(terminal);
+            if (FOLLOW[nt].find(terminal) != FOLLOW[nt].end()) {
+                follow_terminals.push_back(terminal);
             }
         }
         
-        // Print with proper formatting
+        // Print $ first if present
         if (has_dollar) {
             cout << " $";
-            if (!ordered_terms.empty()) {
+            if (!follow_terminals.empty()) {
                 cout << ", ";
             }
+        } else if (!follow_terminals.empty()) {
+            cout << " ";
+        } else {
+            cout << " ";
         }
         
-        for (size_t i = 0; i < ordered_terms.size(); i++) {
-            if (i > 0 || has_dollar) {
+        // Print terminals
+        for (size_t i = 0; i < follow_terminals.size(); i++) {
+            if (i > 0) {
                 cout << ", ";
             }
-            cout << ordered_terms[i];
+            cout << follow_terminals[i];
         }
         
         cout << " }" << endl;
@@ -467,36 +558,46 @@ void Task5() {
                         prefixLen++;
                     }
                     
-                    if (prefixLen > 0 && prefixLen > maxPrefixLen) {
-                        maxPrefixLen = prefixLen;
-                        prefix.clear();
-                        for (size_t k = 0; k < prefixLen; k++) {
-                            prefix.push_back(rules[i].rhs[k]);
+                    if (prefixLen > 0 && prefixLen >= maxPrefixLen) {
+                        if (prefixLen > maxPrefixLen) {
+                            maxPrefixLen = prefixLen;
+                            prefix.clear();
+                            for (size_t k = 0; k < prefixLen; k++) {
+                                prefix.push_back(rules[i].rhs[k]);
+                            }
+                            
+                            // Collect all rules with this prefix
+                            rulesWithPrefix.clear();
                         }
                         
-                        // Collect all rules with this prefix
-                        rulesWithPrefix.clear();
-                        for (const Rule& rule : rules) {
-                            if (rule.rhs.size() >= prefixLen) {
-                                bool matches = true;
-                                for (size_t k = 0; k < prefixLen; k++) {
-                                    if (rule.rhs[k] != prefix[k]) {
-                                        matches = false;
-                                        break;
-                                    }
-                                }
-                                
-                                if (matches) {
-                                    rulesWithPrefix.push_back(rule);
-                                }
+                        // Add rules with this prefix
+                        bool rule_i_matches = true;
+                        bool rule_j_matches = true;
+                        
+                        for (size_t k = 0; k < maxPrefixLen; k++) {
+                            if (k >= rules[i].rhs.size() || rules[i].rhs[k] != prefix[k]) {
+                                rule_i_matches = false;
                             }
+                            if (k >= rules[j].rhs.size() || rules[j].rhs[k] != prefix[k]) {
+                                rule_j_matches = false;
+                            }
+                        }
+                        
+                        if (rule_i_matches && 
+                            find(rulesWithPrefix.begin(), rulesWithPrefix.end(), rules[i]) == rulesWithPrefix.end()) {
+                            rulesWithPrefix.push_back(rules[i]);
+                        }
+                        
+                        if (rule_j_matches && 
+                            find(rulesWithPrefix.begin(), rulesWithPrefix.end(), rules[j]) == rulesWithPrefix.end()) {
+                            rulesWithPrefix.push_back(rules[j]);
                         }
                     }
                 }
             }
             
             // If we found a common prefix, left factor it
-            if (maxPrefixLen > 0) {
+            if (maxPrefixLen > 0 && rulesWithPrefix.size() >= 2) {
                 changed = true;
                 
                 // Create a new non-terminal
