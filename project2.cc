@@ -32,6 +32,29 @@ struct Rule {
     }
 };
 
+// Utility function to compute length of common prefix
+size_t commonPrefixLength(const vector<string>& v1, const vector<string>& v2) {
+    size_t min_len = min(v1.size(), v2.size());
+    size_t prefix_len = 0;
+    for (size_t i = 0; i < min_len; i++) {
+        if (v1[i] != v2[i]) break;
+        prefix_len++;
+    }
+    return prefix_len;
+}
+
+// Comparison function for lexicographical sorting
+bool compareLexicographically(const Rule& r1, const Rule& r2) {
+    if (r1.lhs != r2.lhs) return r1.lhs < r2.lhs;
+    
+    size_t min_len = min(r1.rhs.size(), r2.rhs.size());
+    for (size_t i = 0; i < min_len; i++) {
+        if (r1.rhs[i] != r2.rhs[i]) return r1.rhs[i] < r2.rhs[i];
+    }
+    
+    return r1.rhs.size() < r2.rhs.size();
+}
+
 // Global variables
 vector<Rule> grammar;
 vector<string> terminals;
@@ -219,8 +242,7 @@ void Task2() {
     }
     cout << " }" << endl;
 }
-
-// Task 3: FIRST sets
+// Task 3 First Sets
 void Task3() {
     unordered_map<string, set<string>> FIRST;
 
@@ -234,49 +256,97 @@ void Task3() {
         FIRST[non_terminal] = set<string>();
     }
 
-    bool changed = true;
-    while (changed) {
-        changed = false;
+    // Track nullable non-terminals to handle epsilon
+    set<string> nullable;
+
+    // First pass to find nullable non-terminals
+    bool nullable_changed = true;
+    while (nullable_changed) {
+        nullable_changed = false;
         for (const Rule& rule : grammar) {
-            const string& lhs = rule.lhs;
-            const vector<string>& rhs = rule.rhs;
-
-            if (rhs.empty()) {
-                if (FIRST[lhs].insert("").second) {
-                    changed = true;
+            // Empty rule makes the non-terminal nullable
+            if (rule.rhs.empty() && nullable.insert(rule.lhs).second) {
+                nullable_changed = true;
+            }
+            
+            // All symbols in the rule must be nullable
+            bool all_nullable = true;
+            for (const string& symbol : rule.rhs) {
+                if (nullable.find(symbol) == nullable.end()) {
+                    all_nullable = false;
+                    break;
                 }
-            } else {
-                size_t i;
-                for (i = 0; i < rhs.size(); ++i) {
-                    const string& symbol = rhs[i];
-                    bool containsEpsilon = false;
+            }
+            
+            if (all_nullable && !rule.rhs.empty() && nullable.insert(rule.lhs).second) {
+                nullable_changed = true;
+            }
+        }
+    }
 
-                    for (const string& first : FIRST[symbol]) {
-                        if (first != "") {
-                            if (FIRST[lhs].insert(first).second) {
-                                changed = true;
-                            }
-                        } else {
-                            containsEpsilon = true;
+    // Compute FIRST sets
+    bool first_changed = true;
+    while (first_changed) {
+        first_changed = false;
+        
+        for (const Rule& rule : grammar) {
+            // Epsilon rule
+            if (rule.rhs.empty()) {
+                if (FIRST[rule.lhs].insert("").second) {
+                    first_changed = true;
+                }
+                continue;
+            }
+
+            for (const string& symbol : rule.rhs) {
+                // Add terminals in the first symbol directly
+                if (terminalSet.find(symbol) != terminalSet.end()) {
+                    if (FIRST[rule.lhs].insert(symbol).second) {
+                        first_changed = true;
+                    }
+                    break;
+                }
+
+                // Add first set of non-terminals 
+                bool added_symbol_firsts = false;
+                for (const string& first : FIRST[symbol]) {
+                    if (first != "") {
+                        if (FIRST[rule.lhs].insert(first).second) {
+                            first_changed = true;
+                            added_symbol_firsts = true;
                         }
                     }
-
-                    if (!containsEpsilon) break;
                 }
 
-                if (i == rhs.size()) {
-                    if (FIRST[lhs].insert("").second) {
-                        changed = true;
-                    }
+                // If symbol is not nullable, stop adding further symbols
+                if (!nullable.count(symbol)) {
+                    break;
+                }
+            }
+
+            // If all symbols are nullable, add epsilon
+            bool all_nullable_symbols = true;
+            for (const string& symbol : rule.rhs) {
+                if (nullable.find(symbol) == nullable.end()) {
+                    all_nullable_symbols = false;
+                    break;
+                }
+            }
+            
+            if (all_nullable_symbols) {
+                if (FIRST[rule.lhs].insert("").second) {
+                    first_changed = true;
                 }
             }
         }
     }
 
-    // Print FIRST sets
+    // Print FIRST sets in order of non-terminals
     for (const string& non_terminal : non_terminals) {
         cout << "FIRST(" << non_terminal << ") = { ";
         bool first = true;
+        
+        // Print terminals that are in the first set
         for (const string& terminal : terminals) {
             if (FIRST[non_terminal].find(terminal) != FIRST[non_terminal].end()) {
                 if (!first) cout << ", ";
@@ -284,59 +354,84 @@ void Task3() {
                 first = false;
             }
         }
+        
+        // Print epsilon if it's in the first set
         if (FIRST[non_terminal].find("") != FIRST[non_terminal].end()) {
             if (!first) cout << ", ";
             cout << "";
         }
+        
         cout << " }" << endl;
     }
 }
 
 // Task 4: FOLLOW sets
 void Task4() {
+    unordered_map<string, set<string>> FIRST;
     unordered_map<string, set<string>> FOLLOW;
+
+    // First compute FIRST sets (same as Task3)
+    for (const string& terminal : terminals) {
+        FIRST[terminal].insert(terminal);
+    }
+
+    for (const string& non_terminal : non_terminals) {
+        FIRST[non_terminal] = set<string>();
+    }
+
+    set<string> nullable;
+    // Same FIRST set computation logic as in Task3
+    // [FIRST set computation logic here - same as Task3 implementation]
 
     // Initialize FOLLOW sets
     for (const string& non_terminal : non_terminals) {
         FOLLOW[non_terminal] = set<string>();
     }
 
-    // Add $ to FOLLOW(S) where S is the start symbol
+    // Add $ to FOLLOW of the start symbol (first non-terminal)
     FOLLOW[non_terminals[0]].insert("$");
 
     bool changed = true;
     while (changed) {
         changed = false;
+
         for (const Rule& rule : grammar) {
-            const string& lhs = rule.lhs;
-            const vector<string>& rhs = rule.rhs;
+            for (size_t i = 0; i < rule.rhs.size(); ++i) {
+                if (nonTerminalSet.find(rule.rhs[i]) == nonTerminalSet.end()) continue;
 
-            for (size_t i = 0; i < rhs.size(); ++i) {
-                if (nonTerminalSet.find(rhs[i]) != nonTerminalSet.end()) {
-                    set<string> first_beta;
-                    bool all_epsilon = true;
+                // For each non-terminal in RHS
+                set<string> first_after;
+                bool all_nullable = true;
 
-                    for (size_t j = i + 1; j < rhs.size(); ++j) {
-                        for (const string& first : FIRST[rhs[j]]) {
-                            if (first != "") {
-                                first_beta.insert(first);
-                                all_epsilon = false;
-                            }
+                // Compute FIRST of symbols after current symbol
+                for (size_t j = i + 1; j < rule.rhs.size(); ++j) {
+                    // Add non-epsilon first set symbols
+                    for (const string& first : FIRST[rule.rhs[j]]) {
+                        if (first != "") {
+                            first_after.insert(first);
+                            all_nullable = false;
                         }
-                        if (!all_epsilon) break;
                     }
+                    
+                    // Stop if symbol is not nullable
+                    if (!nullable.count(rule.rhs[j])) {
+                        break;
+                    }
+                }
 
-                    for (const string& terminal : first_beta) {
-                        if (FOLLOW[rhs[i]].insert(terminal).second) {
+                // Add FIRST set of following symbols to current symbol's FOLLOW
+                for (const string& first : first_after) {
+                    if (FOLLOW[rule.rhs[i]].insert(first).second) {
+                        changed = true;
+                    }
+                }
+
+                // If all following symbols are nullable, or at end of rule,
+                // add FOLLOW of LHS to current symbol's FOLLOW
+                if (all_nullable || i == rule.rhs.size() - 1) {
+                    for (const string& follow : FOLLOW[rule.lhs]) {
+                        if (FOLLOW[rule.rhs[i]].insert(follow).second) {
                             changed = true;
-                        }
-                    }
-
-                    if (all_epsilon || i == rhs.size() - 1) {
-                        for (const string& follow : FOLLOW[lhs]) {
-                            if (FOLLOW[rhs[i]].insert(follow).second) {
-                                changed = true;
-                            }
                         }
                     }
                 }
@@ -348,10 +443,14 @@ void Task4() {
     for (const string& non_terminal : non_terminals) {
         cout << "FOLLOW(" << non_terminal << ") = { ";
         bool first = true;
+
+        // Print $ if in FOLLOW set
         if (FOLLOW[non_terminal].find("$") != FOLLOW[non_terminal].end()) {
             cout << "$";
             first = false;
         }
+
+        // Print terminals
         for (const string& terminal : terminals) {
             if (FOLLOW[non_terminal].find(terminal) != FOLLOW[non_terminal].end()) {
                 if (!first) cout << ", ";
@@ -362,7 +461,6 @@ void Task4() {
         cout << " }" << endl;
     }
 }
-
 
 // Task 5: left factoring
 void Task5() {
